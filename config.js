@@ -4,9 +4,9 @@
 // =============================================
 window.FAMILY_CONFIG = {
   // Supabase > Project Settings > API (또는 Data API) 의 Project URL
-  SUPABASE_URL: "",
+  SUPABASE_URL: "https://snvlwjfpjhljsirlwbsz.supabase.co",
   // 같은 화면의 anon public 키 (또는 Publishable key) — 공개돼도 괜찮은 키예요
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_ANON_KEY: "sb_publishable_Vs229eqNudmcGjBoACjOWw_Ez07ReB_",
   // tools/vapid-keys.html 에서 만든 '공개 키(Public Key)'
-  VAPID_PUBLIC_KEY: "",
+  VAPID_PUBLIC_KEY: "BDFAKPqnt2a_O9qBYDxCOphjWcKEfO-jrWRlHk8-H4BogMJzi5MRYG7M72dkm4NAHeSCRbCzTM051aEp3qi9Z48",
 };
