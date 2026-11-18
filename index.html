@@ -137,6 +137,15 @@
   .sw input:checked + span { background: #34C759; }
   .sw input:checked + span::after { transform: translateX(20px); }
   .sw input:disabled + span { opacity: .5; }
+  /* 알림 종류별 시간 설정 */
+  .alert-grp { border-top: 1px solid var(--line); padding: 13px 0; }
+  .alert-grp .set-row { border: 0; padding: 0; }
+  .time-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--sub); flex-wrap: wrap; }
+  .time-row select { -webkit-appearance: none; appearance: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--text);
+    padding: 8px 30px 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff; 
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%237A8094' stroke-width='1.8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; }
+  .alert-grp.off .time-row { opacity: .4; pointer-events: none; }
 
   .toast { position: fixed; left: 50%; bottom: calc(100px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: #1C2030; color: #fff;
     padding: 11px 16px; border-radius: 12px; font-size: 14px; z-index: 20; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 86vw; text-align: center; }
@@ -222,10 +231,19 @@
   <div class="sec-title">알림 설정</div>
   <div class="box">
     <div class="set-row"><div>이 폰으로 알림 받기<small id="pushState">확인 중…</small></div><button class="pill" id="pushBtn">알림 켜기</button></div>
-    <div class="set-row"><div>가족 일정 알림<small>일정 당일 오전 10시 · 가족 모두의 일정</small></div><label class="sw"><input type="checkbox" data-alert="alert_events"><span></span></label></div>
-    <div class="set-row"><div>청약 마감 알림<small>마감일 오전 10시 · 종목·증권사 상세</small></div><label class="sw"><input type="checkbox" data-alert="alert_closing"><span></span></label></div>
-    <div class="set-row"><div>상장 알림<small>상장 전날 밤 10시 · 종목 상세</small></div><label class="sw"><input type="checkbox" data-alert="alert_listing"><span></span></label></div>
-    <div class="set-row"><div>테스트 알림<small>지금 설정대로 이 폰에 보내봐요</small></div><button class="pill" id="testBtn">보내기</button></div>
+    <div class="alert-grp" data-grp="alert_events">
+      <div class="set-row"><div>가족 일정 알림<small>가족 모두의 그날 일정</small></div><label class="sw"><input type="checkbox" data-alert="alert_events"><span></span></label></div>
+      <div class="time-row"><span>일정 당일</span><select data-time="time_events"></select></div>
+    </div>
+    <div class="alert-grp" data-grp="alert_closing">
+      <div class="set-row"><div>청약 마감 알림<small>종목·증권사 상세</small></div><label class="sw"><input type="checkbox" data-alert="alert_closing"><span></span></label></div>
+      <div class="time-row"><span>마감일</span><select data-time="time_closing"></select></div>
+    </div>
+    <div class="alert-grp" data-grp="alert_listing">
+      <div class="set-row"><div>상장 알림<small>종목 상세</small></div><label class="sw"><input type="checkbox" data-alert="alert_listing"><span></span></label></div>
+      <div class="time-row"><select data-time="listing_day"><option value="before">상장 전날</option><option value="same">상장 당일</option></select><select data-time="time_listing"></select></div>
+    </div>
+    <div class="set-row" style="border-top:1px solid var(--line)"><div>테스트 알림<small>켜 둔 알림 내용을 지금 바로 보내봐요</small></div><button class="pill" id="testBtn">보내기</button></div>
   </div>
 
   <div class="sec-title">내 정보</div>
@@ -276,9 +294,9 @@ if (DEMO) {
   $("demoBar").classList.remove("hidden");
   const t = todayStr();
   const people = [
-    { id: "u1", name: "민정", color: "#FFB8CB", alert_events: true, alert_closing: true, alert_listing: true },
-    { id: "u2", name: "준호", color: "#A9C7FF", alert_events: true, alert_closing: false, alert_listing: false },
-    { id: "u3", name: "지수", color: "#A6E3C4", alert_events: true, alert_closing: true, alert_listing: false },
+    { id: "u1", name: "민정", color: "#FFB8CB", alert_events: true, alert_closing: true, alert_listing: true, time_events: "10:00", time_closing: "10:00", time_listing: "22:00", listing_day: "before" },
+    { id: "u2", name: "준호", color: "#A9C7FF", alert_events: true, alert_closing: false, alert_listing: false, time_events: "10:00", time_closing: "10:00", time_listing: "22:00", listing_day: "before" },
+    { id: "u3", name: "지수", color: "#A6E3C4", alert_events: true, alert_closing: true, alert_listing: false, time_events: "08:30", time_closing: "09:00", time_listing: "22:00", listing_day: "before" },
   ];
   const ipoDemo = [
     { kind: "closing", event_date: t, detail: "유캐스트 - 유진, 신영 (5,000)" }, { kind: "listing", event_date: t, detail: "에이엘로봇" },
@@ -667,15 +685,40 @@ $("myBtn").onclick = () => {
   document.querySelectorAll("[data-alert]").forEach((el) => {
     const k = el.dataset.alert; el.checked = k === "alert_events" ? mine[k] !== false : mine[k] === true;
   });
-  updatePushUI(); openSheet("mySheet");
+  document.querySelectorAll("[data-time]").forEach((el) => {
+    const k = el.dataset.time; el.value = (mine[k] || TIME_DEFAULT[k]).slice(0, k === "listing_day" ? 10 : 5);
+  });
+  syncAlertGroups(); updatePushUI(); openSheet("mySheet");
 };
+
+// 알림 시간 고르기 (30분 단위)
+const TIME_DEFAULT = { time_events: "10:00", time_closing: "10:00", time_listing: "22:00", listing_day: "before" };
+const timeLabel = (hm) => {
+  const [h, m] = hm.split(":").map(Number);
+  return `${h < 12 ? "오전" : "오후"} ${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")}`;
+};
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`)
+  .map((v) => `<option value="${v}">${timeLabel(v)}</option>`).join("");
+document.querySelectorAll('[data-time^="time_"]').forEach((el) => { el.innerHTML = TIME_OPTIONS; });
+function syncAlertGroups() {
+  document.querySelectorAll("[data-grp]").forEach((g) => g.classList.toggle("off", !g.querySelector("[data-alert]").checked));
+}
+document.querySelectorAll("[data-time]").forEach((el) => {
+  el.onchange = async () => {
+    const k = el.dataset.time, v = el.value, before = personOf(me.id)[k] || TIME_DEFAULT[k];
+    try {
+      await api.saveProfile({ [k]: v }); personOf(me.id)[k] = v;
+      toast(k === "listing_day" ? `상장 ${v === "same" ? "당일" : "전날"}에 알려드릴게요` : `${timeLabel(v)}에 알려드릴게요`);
+    } catch (e) { el.value = before; toast(e.message); }
+  };
+});
 document.querySelectorAll("[data-alert]").forEach((el) => {
   el.onchange = async () => {
     const k = el.dataset.alert, on = el.checked;
     el.disabled = true;
     try { await api.saveProfile({ [k]: on }); personOf(me.id)[k] = on; toast(on ? "알림을 켰어요" : "알림을 껐어요"); }
     catch (e) { el.checked = !on; toast(e.message); }
-    el.disabled = false;
+    el.disabled = false; syncAlertGroups();
   };
 });
 $("mySave").onclick = async () => {
