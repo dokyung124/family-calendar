@@ -70,10 +70,16 @@
   @keyframes inL { from { transform: translateX(-28%); opacity: 0; } to { transform: none; opacity: 1; } }
   .dow { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 12px; color: var(--sub); text-align: center; padding: 8px 0 6px; }
   .dow div:first-child { color: var(--sun); } .dow div:last-child { color: var(--sat); }
-  .grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .grid { display: block; }
+  /* 한 주 = 7칸, 여러 날 일정은 주 위에 한 줄 막대로 겹쳐 그림 */
+  .week { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); }
+  .week > .bar { position: absolute; margin: 0; pointer-events: none; z-index: 1; }
+  .bar.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .bar.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .bar.faded { opacity: .35; }
   .day { min-height: 92px; border-top: 1px solid var(--line); padding: 4px 2px 3px; overflow: hidden; position: relative; }
   .day .num { font-size: 13px; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 50%; margin: 0 auto 2px; }
-  .day.out .num, .day.out .bar { opacity: .35; }
+  .day.out .num { opacity: .35; }
   .day.sun .num { color: var(--sun); } .day.sat .num { color: var(--sat); }
   .day.today .num { background: var(--accent); color: #fff; font-weight: 700; }
   .day.sel { background: #F1F4FF; }
@@ -311,6 +317,7 @@ if (DEMO) {
     { id: "e2", owner_id: "u3", title: "토익스피킹 시험", event_date: addDays(t, 3) },
     { id: "e3", owner_id: "u2", title: "회식", event_date: addDays(t, 2) },
     { id: "e4", owner_id: "u2", title: "출장", event_date: addDays(t, 6), end_date: addDays(t, 8) },
+    { id: "e8", owner_id: "u1", title: "가족 여행", event_date: addDays(t, 1), end_date: addDays(t, 4) },
     { id: "e5", owner_id: "u1", title: "할머니 생신", event_date: addDays(t, 11) },
     { id: "e6", owner_id: "u3", title: "미용실", event_date: t },
     { id: "e7", owner_id: "u1", title: "요가", event_date: addDays(t, -2) },
@@ -483,18 +490,63 @@ function render() {
 
   const [from, to] = gridRange();
   const month = cursor.getMonth(), today = todayStr();
+  const MAX_LANES = 3, LANE_H = 18, BAR_TOP = 30; // 날짜 숫자 아래부터 막대 3줄까지
   let html = "";
-  for (let d = from; d <= to; d = addDays(d, 1)) {
-    const dt = parse(d), list = eventsOn(d), dow = dt.getDay();
-    const cls = ["day", dt.getMonth() !== month && "out", dow === 0 && "sun", dow === 6 && "sat", d === today && "today", d === selected && "sel"].filter(Boolean).join(" ");
-    const bars = list.slice(0, 3).map((e) => `<div class="bar" style="background:${colorOf(e)}">${esc(e.title)}</div>`).join("");
-    const more = list.length > 3 ? `<div class="more">+${list.length - 3}</div>` : "";
-    // 가족 일정이 우선: 일정이 3개 이상인 날은 공모주를 숨기고, 2개면 한 줄로 합침
-    const labels = ipoLabels(d), room = list.length >= 3 ? 0 : list.length === 2 ? 1 : 2;
-    let ipoHtml = "";
-    if (room >= labels.length) ipoHtml = labels.map((x) => `<div class="ipo">${x}</div>`).join("");
-    else if (room === 1) ipoHtml = `<div class="ipo">${labels.join("·")}</div>`;
-    html += `<div class="${cls}" data-d="${d}"><div class="num">${dt.getDate()}</div>${bars}${more}${ipoHtml}</div>`;
+  for (let ws = from; ws <= to; ws = addDays(ws, 7)) {
+    const we = addDays(ws, 6);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    const col = (d) => Math.round((parse(d) - parse(ws)) / 864e5);
+
+    // 이번 주에 걸친 일정 조각: 긴 일정 먼저, 같은 길이면 먼저 시작하는 것 먼저
+    const segs = events
+      .filter((e) => e.event_date <= we && (e.end_date || e.event_date) >= ws)
+      .map((e) => {
+        const s0 = e.event_date < ws ? ws : e.event_date, e0 = (e.end_date || e.event_date) > we ? we : (e.end_date || e.event_date);
+        return { e, c0: col(s0), c1: col(e0), contL: e.event_date < ws, contR: (e.end_date || e.event_date) > we };
+      })
+      .sort((a, b) => (b.c1 - b.c0) - (a.c1 - a.c0) || a.c0 - b.c0 || a.e.title.localeCompare(b.e.title));
+
+    // 줄(lane) 배정: 겹치지 않는 가장 위 줄에
+    const used = days.map(() => []); // used[칸] = 사용 중인 줄 번호들
+    const hidden = days.map(() => 0);
+    let bars = "";
+    for (const sg of segs) {
+      let lane = 0;
+      while (true) {
+        let free = true;
+        for (let c = sg.c0; c <= sg.c1; c++) if (used[c].includes(lane)) { free = false; break; }
+        if (free) break;
+        lane++;
+      }
+      for (let c = sg.c0; c <= sg.c1; c++) used[c].push(lane);
+      if (lane >= MAX_LANES) { for (let c = sg.c0; c <= sg.c1; c++) hidden[c]++; continue; }
+      const span = sg.c1 - sg.c0 + 1;
+      const allOut = days.slice(sg.c0, sg.c1 + 1).every((d) => parse(d).getMonth() !== month);
+      const cls = ["bar", sg.contL && "cont-l", sg.contR && "cont-r", allOut && "faded"].filter(Boolean).join(" ");
+      const l = sg.contL ? 0 : 2, r = sg.contR ? 0 : 2;
+      bars += `<div class="${cls}" style="background:${colorOf(sg.e)};top:${BAR_TOP + lane * LANE_H}px;` +
+        `left:calc(${sg.c0} * 100% / 7 + ${l}px);width:calc(${span} * 100% / 7 - ${l + r}px)">${esc(sg.e.title)}</div>`;
+    }
+
+    // 칸마다: 날짜 숫자 + (막대 자리 비우기) + "+n" + 공모주
+    let cells = "", tallest = 0;
+    days.forEach((d, i) => {
+      const dt = parse(d), dow = dt.getDay();
+      const cls = ["day", dt.getMonth() !== month && "out", dow === 0 && "sun", dow === 6 && "sat", d === today && "today", d === selected && "sel"].filter(Boolean).join(" ");
+      const shownLanes = used[i].filter((x) => x < MAX_LANES);
+      const space = shownLanes.length ? (Math.max(...shownLanes) + 1) * LANE_H : 0;
+      const total = used[i].length;
+      const more = hidden[i] ? `<div class="more">+${hidden[i]}</div>` : "";
+      // 가족 일정이 우선: 일정이 3개 이상인 날은 공모주를 숨기고, 2개면 한 줄로 합침
+      const labels = ipoLabels(d), room = total >= 3 ? 0 : total === 2 ? 1 : 2;
+      let ipoHtml = "";
+      if (room >= labels.length) ipoHtml = labels.map((x) => `<div class="ipo">${x}</div>`).join("");
+      else if (room === 1) ipoHtml = `<div class="ipo">${labels.join("·")}</div>`;
+      const lines = (more ? 1 : 0) + (ipoHtml.match(/class="ipo"/g) || []).length;
+      tallest = Math.max(tallest, BAR_TOP + space + lines * 13 + 4);
+      cells += `<div class="${cls}" data-d="${d}"><div class="num">${dt.getDate()}</div><div style="height:${space}px"></div>${more}${ipoHtml}</div>`;
+    });
+    html += `<div class="week" style="min-height:${Math.max(92, tallest)}px">${cells}${bars}</div>`;
   }
   $("grid").innerHTML = html;
   renderDay();
